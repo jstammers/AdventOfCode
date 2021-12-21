@@ -1,3 +1,4 @@
 aocd
 numpy
 pandas
+networkx
