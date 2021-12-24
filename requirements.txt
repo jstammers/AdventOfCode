@@ -2,3 +2,4 @@ aocd
 numpy
 pandas
 networkx
+matplotlib
