@@ -61,7 +61,7 @@ end
 
 test = parse_input(example)
 
-function travese_map(seed, map)
+function travese_map(seed::Int, map)
     for (dest, source, r) in eachrow(map)
         if (seed >= source) && (seed < source + r)
             offset = dest - source
@@ -69,6 +69,56 @@ function travese_map(seed, map)
         end
     end
     return seed
+end
+
+function travese_map(seed::Tuple, map)::Vector{Tuple{Int, Int}}
+    s1, s2 = seed
+    new_array = []
+    offset_arr = []
+    covered = []
+    for (dest, source, r ) in eachrow(map)
+        offset = dest - source
+        map_range = (source, source + r - 1)
+        push!(offset_arr, (map_range, offset))
+    end
+    sort!(offset_arr, by=x->x[1][1])
+    for (map_range, offset) in offset_arr
+        m = range_case(seed, map_range, offset)
+        if m[1][1] != -1
+            push!(new_array, m)
+            push!(covered, m .- offset)
+        end
+    end
+    if length(covered) == 0
+        return [seed]
+    end
+    min_covered = minimum(x->x[1],covered)
+    max_covered = maximum(x->x[2],covered)
+    if min_covered > s1
+        push!(new_array, (s1, min_covered - 1))
+    end
+    if max_covered < s2
+        push!(new_array, (max_covered + 1, s2))
+    end
+    sort!(new_array, by=x->x[1][1])
+    return new_array
+end
+
+function range_case(seed_range::Tuple{Int,Int}, map_range::Tuple{Int,Int}, offset::Int)::Tuple{Int,Int}
+    if (seed_range[1] < map_range[1]) && (map_range[1] <= seed_range[2] <= map_range[2])
+        # seed range starts before and ends within map range
+        return (map_range[1] + offset, seed_range[2] + offset)
+    elseif (seed_range[1] < map_range[1]) && (map_range[2] < seed_range[2])
+        # seed range starts before and ends after map range
+        return (seed_range[1] + offset, map_range[2] + offset)
+    elseif (map_range[1] <= seed_range[1] <= map_range[2]) && (map_range[1] <= seed_range[2] <= map_range[2])
+        # seed range starts and ends within map range
+        return (seed_range[1] + offset, seed_range[2] + offset)
+    elseif (map_range[1] < seed_range[1] < map_range[2]) && (seed_range[2] > map_range[2])
+        # seed range starts before and ends in map range
+        return (seed_range[1] + offset, map_range[2] + offset)
+    end
+    return (-1,-1)
 end
 
 function get_arrays(input)
@@ -104,165 +154,40 @@ function sol1(input)
     return minimum(values[end,:])
 end
 
-function create_bounds(lower, upper, bounds)
-    new_bounds = []
-    m = lower
-    for (l, u) in bounds
-        t = (m, l-1)
-        if t[1] < t[2]
-            push!(new_bounds, t)
-        end
-        m = u + 1
-    end
-    if  m < upper
-        push!(new_bounds, (m, upper))
-    end
-    return new_bounds
-end
+function sol2(input, test=nothing)
 
-function create_offset_dict(d, arr)
-    offset_dict = Dict()
-    for (lower, upper) in values(d)
-        not_added = true
-        for (dest, source, r) in eachrow(arr)
-            map_lower = source
-            map_upper = source + r - 1
-            if map_lower <= lower <= map_upper || map_lower <= upper <= map_upper
-                l = lower >= map_lower ? lower : map_lower
-                u = upper <= map_upper ? upper : map_upper
-                off = lower >= map_lower ? lower - map_lower : 0
-                f = dest + off
-                f = (f, f + (u - l))
-                offset_dict[minimum((l, u)), maximum((l,u))] = minimum(f),maximum(f)
-                not_added = false
-                # if upper > map_upper
-                #     offset_dict[map_upper+1, upper] = map_upper+1, upper
-                # end
-                # if lower > map_lower
-                #     offset_dict[lower, map_lower-1] = lower, map_lower-1
-                # end
-            end
-        end
-        # add the identity mapping for all ranges that aren't mapped
-
-        
-        # if not_added
-        #     offset_dict[lower, upper] = lower, upper
-        # end
-    end
-    missing_intervals = get_missing_intervals(values(d), values(offset_dict))
-    for (l, u) in missing_intervals
-        offset_dict[l, u] = l, u
-    end
-    k_sum = 0
-    v_sum = 0
-    for (k, v) in offset_dict
-        k_sum += k[2] - k[1] + 1
-        v_sum += v[2] - v[1] + 1
-    end
-    if k_sum != v_sum
-        throw("k_sum != v_sum")
-        println("k_sum = $k_sum, v_sum = $v_sum")
-    end
-    
-    return offset_dict
-end
-function get_missing_intervals(init_tuples, final_tuples)
-    missing_intervals = []
-    for init in init_tuples
-        init_start, init_end = init
-        overlap_found = false
-        for final in final_tuples
-            final_start, final_end = final
-            if !(final_end < init_start || final_start > init_end)
-                # Overlap found
-                overlap_found = true
-                if init_start < final_start
-                    push!(missing_intervals, (init_start + 1, final_start - 1))
-                end
-                if init_end > final_end
-                    push!(missing_intervals, (final_end + 1, init_end - 1))
-                end
-                break
-            end
-        end
-        if !overlap_found
-            push!(missing_intervals, init)
-        end
-    end
-    return missing_intervals
-end
-
-
-function sol2(input)
     # get each array
     arrays = get_arrays(input)
     seeds = arrays[1]
     maps = arrays[2:end]
-    seed_ranges = Dict()
+    seed_ranges = Vector{Tuple{Int, Int}}()
     for i in 1:Int(length(seeds)/2)
         si = seeds[2*i-1]
         sr = seeds[2*i]
-        seed_ranges[(si, si+sr-1)] = (si, si+sr-1)
+        push!(seed_ranges, (si, si + sr))
     end
-    offset_ranges = [seed_ranges]
+    if test === nothing
+        offset_ranges = [seed_ranges]
+    else
+        offset_ranges = [[test]]
+    end
+    # offset_ranges = [seed_ranges]
+
     for (i, arr) in enumerate(maps)
+        t = Vector{Tuple{Int, Int}}()
         d = offset_ranges[i]
-        offset_dict = create_offset_dict(d, arr)
-        push!(offset_ranges, offset_dict)
-    end
-    return minimum([v[1] for v in values(offset_ranges[end])])
-end
-
-input = read("input", String)
-v = sol1(input)
-example_sol = sol2(example)
-sol2(input)
-# a = [88 18 7 ; 18 25 70]
-# d = Dict([(81, 94) => (81,94)])
-# create_offset_dict(d, a)
-
-a2 = [45 77 23 ; 81 45 19 ; 68 64 13]
-d2 = Dict([(81, 94) => (74,87)])
-# create_offset_dict(d2, a2)
-check = [82, 84, 84, 84, 77, 45, 46, 46]
-
-a3 = [0 69 1 ; 1 0 69]
-d3 = Dict([(77,87) => (45,55)])
-# create_offset_dict(d3, a3)
-a4 = [60 56 37 ; 56 93 4]
-d4 = Dict([(45,55) => (46,56)])
-create_offset_dict(d4, a4)
-# create_offset_dict(d3, a3)
-for (i, value) in enumerate(check)
-    if i == length(check)
-        break
-    end
-    m = example_sol[i+1]
-    for (init, final) in m
-        if init[1] <= value <= init[2]
-            if final[1] <= check[i+1] <= final[2]
-                println("true")
-            else
-                println("false")
-                println("value = $value, check[i+1] = $(check[i+1])")
-                println(i)
+        for j in d
+            m = travese_map(j, arr)::Vector{Tuple{Int, Int}}
+            if m !== nothing
+                append!(t, m)
             end
         end
+        sort!(t, by=x->x[1])
+        push!(offset_ranges, t)
     end
+    return offset_ranges
 end
 
-# seeds, seed_map, soil_map, fertilizer_map, water_map, light_map, temperature_map, humidity_map = parse_input(example)
-
-
-# s = to_array(soil_map)
-# travese_map(14, s)
-# seed_to_soil = test[2]
-
-# s = to_array(seed_to_soil)
-
-# s[1,:] .<= 50 .& s[2,:] .>= 50
-
-# # Base.between.([2,2,1], s[:,1], s[:,2]) 
-
-# travese_map(14, s)
+input = read("2023/05/input", String)
+println(sol1(input))
+println(sol2(input))
