@@ -1,4 +1,5 @@
 {
     "python.pythonPath": "/home/jimmy/.pyenv/versions/julia/bin/python",
-    "jupyter.jupyterServerType": "local"
+    "jupyter.jupyterServerType": "local",
+    "julia.environmentPath": "/Users/vickiejones/Documents/AdventOfCode"
 }
